@@ -1,0 +1,7 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=1589
+
+This script is an implementation of the Japanese SKK (Simple Kana to Kanji
+conversion program).
+
+This script is no longer maintained here.
+You can get newer versions of skk.vim from vimscript #3118.
