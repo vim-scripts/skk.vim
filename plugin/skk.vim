@@ -3,8 +3,8 @@
 " skk.vim
 "
 " Author: Noriaki Yagi <no_yag@yahoo.co.jp>
-" Version: $Id: skk.vim,v 0.21 2006/06/28 08:28:46 noriaki Exp $
-" Last Change: 28-Jun-2006.
+" Version: $Id: skk.vim,v 0.22 2006/10/11 09:26:53 noriaki Exp noriaki $
+" Last Change: 11-Oct-2006.
 "
 " 使い方:
 " skk_jisyo および skk_large_jisyo を適宜変更する。
@@ -16,7 +16,6 @@
 " 更してもその変更は反映されないので、一回 :call SkkDeleteRulesSection() を実
 " 行して次回起動時以降に SkkAddRulesSection() を実行する必要がある。
 "
-" TODO maxfuncdepth を越えたときの挙動
 " TODO Insertモードで <Esc> をマップするとコンソールで矢印キーが使えない。
 " TODO 辞書の候補に Lisp の式が書かれている場合の処理
 " TODO undo がぐちゃぐちゃになる。
@@ -813,6 +812,9 @@ function! s:SkkBufInit()
     let b:skk_fo_save = &formatoptions
   endif
   let b:skk_autofill = 0	" Auto Fill モードか？
+  if !exists("b:skk_map_silent")
+    let b:skk_map_silent = 2	" <silent> 付きでマップしたか？
+  endif
 endfunction
 
 " SkkRuleCompile
@@ -963,7 +965,7 @@ function! SkkMode(on)
   if !exists("b:skk_on")
     call s:SkkBufInit()
   endif
-  let s:skk_in_cmdline = stridx(mode(), "c") != -1
+  let s:skk_in_cmdline = mode() == "c"
   if a:on
     if s:skk_rule_compiled == 0
       call SkkRuleCompile()
@@ -971,7 +973,7 @@ function! SkkMode(on)
     call s:SkkOn()
     set cpo-=v
     set cpo-=<
-    call SkkMap()
+    call SkkMap(s:skk_in_cmdline == 0)
     call s:SkkMapCR()
     let &l:formatoptions = ""
     if s:skk_in_cmdline && v:version >= 603
@@ -986,6 +988,7 @@ function! SkkMode(on)
     if s:skk_in_cmdline == 0
       call s:SkkUnmapNormal()
     endif
+    call SkkMap(0)
     let b:skk_on = 0
     let &rulerformat = s:skk_saved_ruf
     let &ruler = s:skk_saved_ru
@@ -1060,7 +1063,7 @@ endfunction
 
 function! SkkAbbrevMode(kana)
   if b:skk_henkan_mode == 1 || b:skk_henkan_mode == 2
-    call s:SkkEcho("Already in ▽ mode", "None", 1)
+    call s:SkkEcho("Already in ▽ mode", "WarningMsg", 1)
     return ""
   endif
   let kana = SkkSetHenkanPoint1(a:kana)
@@ -1295,39 +1298,45 @@ function! s:SkkCancel()
   return ''
 endfunction
 
-function! SkkMap()
-  if hasmapto("<SID>SkkKey", "l")
+function! SkkMap(silent)
+  if hasmapto("<SID>SkkKey", "l") && b:skk_map_silent == a:silent
     return
+  endif
+  let b:skk_map_silent = a:silent
+  if b:skk_map_silent
+    let mapstr = "lnoremap <buffer> <silent> "
+  else
+    let mapstr = "lnoremap <buffer> "
   endif
   lmapclear <buffer>
   let i = char2nr(" ")
   let tilde = char2nr("~")
   while i <= tilde
     let ch = "<Char-" . i . ">"
-    exe "lnoremap <buffer> " . ch . " <C-r>=<SID>SkkKey(\"" . escape(nr2char(i), '"\|') . "\")<CR>"
+    exe mapstr . ch . " <C-r>=<SID>SkkKey(\"" . escape(nr2char(i), '"\|') . "\")<CR>"
     let i = i + 1
   endwhile
-  lnoremap <buffer> <Tab>	<C-r>=<SID>SkkKey("<C-v><Tab>")<CR>
-  lnoremap <buffer> <CR>	<C-r>=<SID>SkkKey("<C-v><CR>")<CR><CR>
-  lnoremap <buffer> <C-j>	<C-r>=<SID>SkkKey("<C-v><C-j>")<CR>
-  lnoremap <buffer> <C-g>	<C-r>=<SID>SkkKey("<C-v><C-g>")<CR>
-  lnoremap <buffer> <BS>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>
-  lnoremap <buffer> <C-h>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>
-  lnoremap <buffer> <Home>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Home>
-  lnoremap <buffer> <End>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><End>
-  lnoremap <buffer> <Left>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Left>
-  lnoremap <buffer> <Right>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Right>
-  lnoremap <buffer> <C-a>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Home>
-  lnoremap <buffer> <C-e>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><End>
-  lnoremap <buffer> <C-b>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Left>
-  lnoremap <buffer> <C-f>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Right>
-  lnoremap <buffer> <C-w>	<C-r>=<SID>SkkKey("<C-v><C-u>")<CR><C-w>
-  lnoremap <buffer> <C-u>	<C-r>=<SID>SkkKey("<C-v><C-u>")<CR><C-u>
-  lnoremap <buffer> <Esc>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><Esc>
-  lnoremap <buffer> <C-c>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><C-c>
-  exe "lnoremap <buffer> " . g:skk_abbrev_to_zenei_key . " <C-r>=<SID>SkkKey(\"<C-v><C-q>\")<CR>"
+  exe mapstr . '<Tab>	<C-r>=<SID>SkkKey("<C-v><Tab>")<CR>'
+  exe mapstr . '<CR>	<C-r>=<SID>SkkKey("<C-v><CR>")<CR><CR>'
+  exe mapstr . '<C-j>	<C-r>=<SID>SkkKey("<C-v><C-j>")<CR>'
+  exe mapstr . '<C-g>	<C-r>=<SID>SkkKey("<C-v><C-g>")<CR>'
+  exe mapstr . '<BS>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>'
+  exe mapstr . '<C-h>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>'
+  exe mapstr . '<Home>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Home>'
+  exe mapstr . '<End>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><End>'
+  exe mapstr . '<Left>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Left>'
+  exe mapstr . '<Right>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Right>'
+  exe mapstr . '<C-a>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Home>'
+  exe mapstr . '<C-e>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><End>'
+  exe mapstr . '<C-b>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Left>'
+  exe mapstr . '<C-f>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Right>'
+  exe mapstr . '<C-w>	<C-r>=<SID>SkkKey("<C-v><C-u>")<CR><C-w>'
+  exe mapstr . '<C-u>	<C-r>=<SID>SkkKey("<C-v><C-u>")<CR><C-u>'
+  exe mapstr . '<Esc>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><Esc>'
+  exe mapstr . '<C-c>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><C-c>'
+  exe mapstr . g:skk_abbrev_to_zenei_key . " <C-r>=<SID>SkkKey(\"<C-v><C-q>\")<CR>"
   if exists("g:format_command") && g:skk_autofill_toggle_key != ""
-    exe "lnoremap <buffer> " . g:skk_autofill_toggle_key . " <C-r>=<SID>SkkKey(\"<C-v><C-k>\")<CR>"
+    exe mapstr . g:skk_autofill_toggle_key . " <C-r>=<SID>SkkKey(\"<C-v><C-k>\")<CR>"
   endif
 endfunction
 
@@ -1344,9 +1353,10 @@ function! s:SkkMapNormal()
   let keys = "iIaAoOcCsSR"
   let i = 0
   while keys[i] != ""
-    exe "nnoremap <silent> <buffer> " . keys[i] . " :let &iminsert = 1<CR>" . keys[i]
+    exe "nnoremap <silent> <buffer> " . keys[i] . " :call SkkMap(1)<CR>:let &iminsert = 1<CR>" . keys[i]
     let i = i + 1
   endwhile
+  call SkkMap(0)	" コマンドライン側にセットしておく。
 endfunction
 
 function! s:SkkUnmapNormal()
@@ -1359,12 +1369,15 @@ function! s:SkkUnmapNormal()
 endfunction
 
 function! s:SkkKey(key)
-  let s:skk_in_cmdline = stridx(mode(), "c") != -1
+  let s:skk_in_cmdline = mode() == "c"
   unlet! s:skk_cmdline_str s:skk_cmdline_pos s:skk_bs_str s:skk_cur_col s:skk_cur_line
   let &l:formatoptions = ""
   let b:skk_rom_erased = 0
   if b:skk_on == 0
     call s:SkkOn()
+  endif
+  if b:skk_map_silent == s:skk_in_cmdline
+    call SkkMap(s:skk_in_cmdline == 0)
   endif
   if a:key == "\<CR>"
     if s:skk_in_cmdline && !g:skk_keep_state && (!g:skk_egg_like_newline || b:skk_henkan_mode == 0)
@@ -1393,6 +1406,12 @@ function! s:SkkKey(key)
     let str = s:SkkCancel()
   elseif a:key == "\<C-h>"
     let str = s:SkkBackspace()
+    if s:skk_in_cmdline && !g:skk_keep_state && getcmdpos() == 1 && strlen(getcmdline()) == 0
+      if &imsearch == 1
+	let &imsearch = 0
+      endif
+      let &iminsert = 0
+    endif
     let &backspace = s:bs_save
   elseif a:key == "\<C-a>"
     let str = s:SkkCleanRom()
@@ -1453,6 +1472,9 @@ function! s:SkkInsert(char)
       endif
     catch /^skk .* mark$/
       return s:SkkInsert(a:char)
+    catch /^Vim.*:E132:/
+      call s:SkkEcho( "SKK: Sorry, 'maxfuncdepth' is exhausted.\nSKK: Please increase 'maxfuncdepth'.", "ErrorMsg", 2)
+      return s:SkkCancel()
     endtry
   endif
 endfunction
@@ -1613,6 +1635,16 @@ function! SkkSetHenkanPoint(char)
       let b:skk_henkan_mode = 0
       throw "skk cannot find " . g:skk_marker_white . " mark"
     endif
+    if a:char ==# g:skk_start_henkan_key
+      let kana = s:SkkCleanRom()
+      let okuri = strpart(s:SkkGetLine("."), b:skk_ostart, s:SkkCursorCol() - b:skk_ostart - 1) . kana
+      if okuri != ""
+	let b:skk_okurigana = okuri
+	return SkkStartHenkan()
+      endif
+      let c = s:SkkEcho("No okurigana!", "WarningMsg", 1)
+      return c == "" ? "" : SkkSetHenkanPoint(c)
+    endif
     " for KanJI  ▽かん*j → ▽かん*I → ▽かん*じ
     let kana = s:SkkInsertKana(s:SkkDowncase(a:char))
     if b:skk_rom == ''
@@ -1761,6 +1793,11 @@ function! SkkStartHenkan(...)
     let b:skk_henkan_mode = 3
     let hstart = b:skk_hstart + strlen(g:skk_marker_white) - 1
     let b:skk_midasi = strpart(line, hstart, b:skk_ostart - 1 - hstart) . kana
+    if b:skk_midasi == ""
+      call s:SkkEraseYomi()
+      let b:skk_henkan_mode = 0
+      return ""
+    endif
     if b:skk_mode == 'kata'
       let b:skk_henkan_key = s:SkkGetHenkanKey(s:SkkKata2Hira(b:skk_midasi), s:SkkKata2Hira(b:skk_okurigana))
     else
@@ -1980,6 +2017,7 @@ function! s:SkkTourokuMode()
   let enter_touroku = !exists("s:skk_in_touroku")
   if enter_touroku
     let s:skk_in_touroku = 1
+    call SkkMap(0)
     cnoremap <buffer> <C-g> <C-\>e<SID>SkkCmdCancel()<CR>
     let cmd = "call cursor(" . line(".") . ", " . col(".") . ")"
   endif
@@ -2031,6 +2069,7 @@ function! s:SkkTourokuMode()
     let s:skk_cmdline_pos = prevpos
     if enter_touroku
       silent! cunmap <buffer> <C-g>
+      call SkkMap(mode() != "c")
       unlet s:skk_in_touroku
       if s:skk_in_cmdline == 0
 	exe cmd
